@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enhanced Quiz with Live Admin Leaderboard</title>
+<style>
+    body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    background-image: url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=60'); /* Default start background */
+    background-size: cover;
+    background-position: center;
+    transition: background 0.5s;
+     }
+    .container {
+        background: rgba(255,255,255,0.9);
+        padding: 30px;
+        border-radius: 10px;
+        width: 400px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        text-align: center;
+    }
+    button {
+        padding: 10px 15px;
+        margin: 5px 0;
+        cursor: pointer;
+        border-radius: 5px;
+        border: none;
+        background-color: #007BFF;
+        color: white;
+        transition: 0.3s;
+    }
+    button:hover { background-color: #0056b3; }
+    #timer {
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #333;
+    }
+    #score { margin-top: 10px; font-weight: bold; }
+    .leaderboard {
+        margin-top: 20px;
+        text-align: left;
+        max-height: 150px;
+        overflow-y: auto;
+        padding: 5px;
+        background: rgba(0,0,0,0.05);
+        border-radius: 5px;
+        font-size: 14px;
+    }
+    .leaderboard-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 5px;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Enhanced Quiz</h1>
+
+    <div id="userSection">
+        <input type="text" id="username" placeholder="Enter your name">
+        <button onclick="joinQuiz()">Start Quiz</button>
+        <br><br>
+        <input type="password" id="adminPass" placeholder="Admin Password">
+        <button onclick="showAdminLeaderboard()">Admin Login</button>
+    </div>
+
+    <div id="quizSection" style="display:none;">
+        <div id="timer">Time: 10s</div>
+        <h2 id="question"></h2>
+        <div id="options"></div>
+        <p id="score"></p>
+    </div>
+
+    <!-- Leaderboard will be dynamically created for admin -->
+    <div id="leaderboardContainer"></div>
+</div>
+
+<script>
+const quizData = [
+    { q: "Capital of France?", options:["Paris","London","Berlin","Madrid"], answer:"Paris", bg:"https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=800&q=60" },
+    { q: "5 + 7 = ?", options:["10","11","12","13"], answer:"12", bg:"https://images.unsplash.com/photo-1596496053645-d1a5b7a61be5?auto=format&fit=crop&w=800&q=60" },
+    { q: "JavaScript is?", options:["Language","Library","Framework","Database"], answer:"Language", bg:"https://images.unsplash.com/photo-1505685296765-3a2736de412f?auto=format&fit=crop&w=800&q=60" }
+];
+
+let currentUser = '';
+let currentQuestion = 0;
+let score = 0;
+let timerInterval;
+const timePerQuestion = 10;
+let timeLeft = timePerQuestion;
+
+let leaderboardData = JSON.parse(localStorage.getItem('quizLeaderboard')) || {};
+
+const ADMIN_PASSWORD = "admin123"; // Change this to a strong password
+let adminLoggedIn = false;
+
+function joinQuiz() {
+    const name = document.getElementById('username').value.trim();
+    if(!name){ alert('Enter your name'); return; }
+    currentUser = name;
+    document.getElementById('userSection').style.display = 'none';
+    document.getElementById('quizSection').style.display = 'block';
+    showQuestion();
+    updateScore();
+}
+
+function showQuestion() {
+    if(currentQuestion >= quizData.length){
+        alert('Quiz Completed!');
+        saveScore();
+        currentQuestion = 0;
+        score = 0;
+        clearInterval(timerInterval);
+        timeLeft = timePerQuestion;
+        document.getElementById('quizSection').style.display = 'none';
+        document.getElementById('userSection').style.display = 'block';
+        return;
+    }
+
+    const qData = quizData[currentQuestion];
+    document.getElementById('question').innerText = qData.q;
+    document.getElementById('options').innerHTML = '';
+
+    document.body.style.backgroundImage = `url(${qData.bg})`;
+
+    qData.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.innerText = opt;
+        btn.onclick = () => checkAnswer(opt, btn);
+        document.getElementById('options').appendChild(btn);
+    });
+
+    timeLeft = timePerQuestion;
+    document.getElementById('timer').innerText = `Time: ${timeLeft}s`;
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timer').innerText = `Time: ${timeLeft}s`;
+        if(timeLeft <= 0){
+            clearInterval(timerInterval);
+            currentQuestion++;
+            showQuestion();
+        }
+    }, 1000);
+}
+
+function checkAnswer(selected, btn) {
+    const correct = quizData[currentQuestion].answer;
+    if(selected === correct){
+        score += 10;
+        btn.style.backgroundColor = 'green';
+    } else {
+        btn.style.backgroundColor = 'red';
+    }
+    clearInterval(timerInterval);
+    setTimeout(()=>{
+        currentQuestion++;
+        showQuestion();
+        updateScore();
+    }, 500);
+}
+
+function updateScore(){
+    document.getElementById('score').innerText = `Your Score: ${score}`;
+}
+
+function saveScore(){
+    if(!leaderboardData[currentUser] || score > leaderboardData[currentUser]){
+        leaderboardData[currentUser] = score;
+        localStorage.setItem('quizLeaderboard', JSON.stringify(leaderboardData));
+        if(adminLoggedIn){
+            updateLeaderboard(); 
+        }
+    }
+}
+
+function showAdminLeaderboard(){
+    const pass = document.getElementById('adminPass').value;
+    if(pass === ADMIN_PASSWORD){
+        adminLoggedIn = true;
+        createLeaderboardDiv();
+        updateLeaderboard();
+        alert("Admin logged in! Leaderboard is visible.");
+    } else {
+        alert("Wrong password!");
+    }
+}
+
+function createLeaderboardDiv(){
+    if(!document.getElementById('adminLeaderboard')){
+        const container = document.getElementById('leaderboardContainer');
+        const div = document.createElement('div');
+        div.id = 'adminLeaderboard';
+        div.className = 'leaderboard';
+        div.innerHTML = `<h3>Leaderboard</h3><div id="leaderboard"></div>`;
+        container.appendChild(div);
+    }
+}
+
+function updateLeaderboard(){
+    const lbDiv = document.getElementById('leaderboard');
+    lbDiv.innerHTML = '';
+    const sorted = Object.entries(leaderboardData).sort((a,b) => b[1]-a[1]);
+    sorted.forEach(([name, scr], index)=>{
+        const div = document.createElement('div');
+        div.className = 'leaderboard-item';
+        div.innerHTML = `<span>${index + 1}. ${name}</span><span>${scr}</span>`;
+        lbDiv.appendChild(div);
+    });
+}
+</script>
+
+</body>
+</html>
